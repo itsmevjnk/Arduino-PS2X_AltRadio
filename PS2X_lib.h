@@ -243,6 +243,9 @@ class PS2X {
     bool enablePressures();
     byte Analog(byte);
     void reconfig_gamepad();
+	
+	unsigned char PS2data[21];
+    volatile unsigned long t_last_att; // time since last ATT inactive
 
   private:
     inline void CLK_SET(void);
@@ -262,7 +265,6 @@ class PS2X {
     byte config_gamepad_stub(bool, bool); // common gamepad initialization sequence
 
     unsigned char _gamepad_shiftinout (char);
-    unsigned char PS2data[21];
     void sendCommandString(byte*, byte);
     unsigned char i;
     unsigned int last_buttons;
@@ -303,8 +305,6 @@ class PS2X {
     #if defined(SPI_HAS_TRANSACTION)
       SPISettings _spi_settings; // hardware SPI transaction settings
     #endif
-
-    volatile unsigned long t_last_att; // time since last ATT inactive
 
 	
     unsigned long last_read;
