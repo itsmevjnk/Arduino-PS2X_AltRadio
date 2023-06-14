@@ -29,7 +29,7 @@
 class Si4432 {
 public:
 
-	Si4432(uint8_t csPin, uint8_t sdnPin = 0, uint8_t InterruptPin = 0); // when a InterruptPin is given, interrupts are checked with this pin - rather than SPI polling
+	// Si4432(uint8_t csPin, uint8_t sdnPin = 0, uint8_t InterruptPin = 0); // when a InterruptPin is given, interrupts are checked with this pin - rather than SPI polling
 
 	void setFrequency(unsigned long baseFrequency); // sets the freq. call before boot
 	void setChannel(byte channel); // sets the channel. call before switching to tx or rx mode
@@ -59,18 +59,18 @@ public:
 	void turnOn();
 	void turnOff();
 
+	uint8_t _csPin, _sdnPin, _intPin = 0;
+
 protected:
 	enum AntennaMode {
 		RXMode = 0x04, TXMode = 0x08, Ready = 0x01, TuneMode = 0x02
 	};
-
-	uint8_t _csPin, _sdnPin, _intPin;
 	SPIClass* _spi;
 
-	uint64_t _freqCarrier;
-	uint8_t _freqChannel;
-	uint16_t _kbps;
-	uint16_t _packageSign;
+	uint64_t _freqCarrier = 433000000;
+	uint8_t _freqChannel = 0;
+	uint16_t _kbps = 100;
+	uint16_t _packageSign = 0xDEAD;
 
 	uint8_t* _config; // config 
 

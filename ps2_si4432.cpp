@@ -1,17 +1,19 @@
 #include "ps2_si4432.h"
 
 #define MAX_TRANSMIT_TIMEOUT 200
-// #define DEBUG
+//#define SI4432_DEBUG
 
 //values here are kept in khz x 10 format (for not to deal with decimals) - look at AN440 page 26 for whole table
 const uint16_t IFFilterTable[][2] = { { 322, 0x26 }, { 3355, 0x88 }, { 3618, 0x89 }, { 4202, 0x8A }, { 4684, 0x8B }, {
 		5188, 0x8C }, { 5770, 0x8D }, { 6207, 0x8E } };
 
+/*
 Si4432::Si4432(uint8_t csPin, uint8_t sdnPin, uint8_t InterruptPin) :
 		_csPin(csPin), _sdnPin(sdnPin), _intPin(InterruptPin), _freqCarrier(433000000), _freqChannel(0), _kbps(100), _packageSign(
 				0xDEAD) { // default is 450 mhz
 
 }
+*/
 
 void Si4432::setFrequency(unsigned long baseFrequencyMhz) {
 

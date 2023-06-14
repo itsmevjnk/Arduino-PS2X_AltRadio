@@ -1,4 +1,4 @@
-#include "PS2X_lib.h"
+#include "PS2X_lib_AltRadio.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -18,6 +18,8 @@ static byte set_bytes_large[]={0x01,0x4F,0x00,0xFF,0xFF,0x03,0x00,0x00,0x00};
 static byte exit_config[]={0x01,0x43,0x00,0x00,0x5A,0x5A,0x5A,0x5A,0x5A};
 static byte enable_rumble[]={0x01,0x4D,0x00,0x00,0x01};
 static byte type_read[]={0x01,0x45,0x00,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A};
+
+static byte packet_idle[]={0xFF, 0x79, 0x5A, 0xFF, 0xFF, 0x80, 0x7F, 0x80, 0x7F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 /****************************************************************************************/
 boolean PS2X::NewButtonState() {
@@ -90,8 +92,47 @@ void PS2X::read_gamepad() {
    read_gamepad(false, 0x00);
 }
 
+// #define RADIO_DEBUG
+
 /****************************************************************************************/
 boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
+  bool radio_ret = true; // OK by default
+  if(use_radio) {
+    uint8_t trx_buf[32];
+    radio_pktid = (radio_pktid + 1) & 0x7FFF;
+    trx_buf[0] = (uint8_t) (radio_pktid & 0xFF);
+    trx_buf[1] = (uint8_t) (radio_pktid >> 8);
+    trx_buf[2] = 0x02;
+    trx_buf[3] = (motor1) ? 1 : 0;
+    trx_buf[4] = motor2;
+    if(radio.sendPacket(5, trx_buf) == true) {
+      radio.startListening();
+      uint64_t t_poll = millis();
+      while(millis() - t_poll < RADIO_TIMEOUT) {
+        if(radio.isPacketReceived()) {
+          uint8_t len;
+          radio.getPacketReceived(&len, trx_buf);
+          radio.startListening();
+          uint16_t id = trx_buf[0] | (trx_buf[1] << 8);
+          if(!(id & (1 << 15)) && id == radio_pktid) {
+            for(uint8_t i = 3; i < 21; i++) PS2data[i] = trx_buf[i]; // update data
+            break;
+          }
+          radio_timeout = 0;
+        }
+      }
+      if(millis() - t_poll >= RADIO_TIMEOUT) {
+#ifdef RADIO_DEBUG
+        Serial.println("Radio packet timeout");
+#endif
+        if(radio_timeout == 0) radio_timeout = millis();
+        else if(millis() - radio_timeout >= RADIO_TIMEOUT_IDLE) {
+          for(uint8_t i = 0; i < 21; i++) PS2data[i] = packet_idle[i]; // set everything to idle so nothing freaks out
+        }
+      }
+    } else radio_ret = false;
+  } else {
+
    double temp = millis() - last_read;
 
    if (temp > 1500) //waited to long
@@ -137,6 +178,8 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
       if (read_delay < 10)
          read_delay++;   // see if this helps out...
    }
+  
+  }
 
 #ifdef PS2X_COM_DEBUG
    Serial.print("OUT:IN ");
@@ -155,6 +198,7 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
    Serial.println("");
 #endif
 
+
    last_buttons = buttons; //store the previous buttons states
 
 #if defined(__AVR__)
@@ -163,7 +207,7 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
    buttons =  (uint16_t)(PS2data[4] << 8) + PS2data[3];   //store as one value for multiple functions
 #endif
    last_read = millis();
-   return ((PS2data[1] & 0xf0) == 0x70);  // 1 = OK = analog mode - 0 = NOK
+   return ((use_radio) ? radio_ret : ((PS2data[1] & 0xf0) == 0x70));  // 1 = OK = analog mode - 0 = NOK
 }
 
 /****************************************************************************************/
@@ -266,10 +310,42 @@ byte PS2X::config_gamepad(SPIClass* spi, uint8_t att, bool pressures, bool rumbl
   return config_gamepad_stub(pressures, rumble);
 }
 
+#define EEPROM_DEBUG
+
 byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
   byte temp[sizeof(type_read)];
 
-
+  Wire.begin(); // so we can poll for EEPROM
+  
+  Wire.beginTransmission(EEPROM_ADDR);
+  if(Wire.endTransmission() == 0) {
+    /* use radio */
+    use_radio = true;
+    radio._csPin = _att_pin; radio._sdnPin = 25; // TODO
+    SPIClass* hspi = new SPIClass(HSPI);
+    hspi->begin(_clk_pin, _dat_pin, _cmd_pin, _att_pin);
+    Wire.beginTransmission(EEPROM_ADDR);
+    Wire.write(0); // read from beginning
+    Wire.endTransmission();
+    for(uint8_t i = 0; i < 43; i++) {
+      if(i % 32 == 0) Wire.requestFrom(EEPROM_ADDR, (i == 0) ? 32 : (43 - i), true);
+      radio_config[i] = Wire.read();
+#ifdef EEPROM_DEBUG
+      if(i % 8 == 0) {
+        Serial.printf_P(PSTR("\n%02X: "), i);
+      }
+      Serial.printf_P(PSTR("%02X "), radio_config[i]);
+#endif
+    }
+    if(radio.init(hspi, radio_config)) {
+      radio.startListening();
+      for(uint8_t i = 0; i < 21; i++) PS2data[i] = packet_idle[i]; // set everything to idle so nothing freaks out
+      buttons =  (uint16_t)(PS2data[4] << 8) + PS2data[3];
+      last_buttons = buttons;
+      return 0;
+    } else return 1;
+  }
+  
   //new error checking. First, read gamepad a few times to see if it's talking
   read_gamepad();
   read_gamepad();

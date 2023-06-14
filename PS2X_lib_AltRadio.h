@@ -80,6 +80,10 @@ GNU General Public License for more details.
 #ifndef PS2X_lib_h
   #define PS2X_lib_h
 
+#ifndef ESP32
+#error "This library is for the Makerbot BANHMI only!/Thu vien nay chi danh cho mach Makerbot BANHMI!"
+#endif
+
 #if ARDUINO > 22
   #include "Arduino.h"
 #else
@@ -90,6 +94,9 @@ GNU General Public License for more details.
 #include <stdio.h>
 #include <stdint.h>
 #include <SPI.h>
+
+#include "ps2_si4432.h"
+#include <Wire.h> // for I2C EEPROM
 
 /* SPI timing configuration */
 #define CTRL_BITRATE        250000UL // SPI bitrate (Hz). Please note that on AVR Arduinos, the lowest bitrate possible is 125kHz.
@@ -204,6 +211,10 @@ typedef uint32_t port_mask_t;
 #define CHK(x,y) (x & (1<<y))
 #define TOG(x,y) (x^=(1<<y))
 
+#define EEPROM_ADDR       0x50 // address of radio configuration EEPROM
+
+#define RADIO_TIMEOUT     25 // radio packet timeout duration (mS)
+#define RADIO_TIMEOUT_IDLE    150 // timeout duration before setting controller to idle
 class PS2X {
   public:
     boolean Button(uint16_t);                //will be TRUE if button is being pressed
@@ -247,7 +258,14 @@ class PS2X {
 	unsigned char PS2data[21];
     volatile unsigned long t_last_att; // time since last ATT inactive
 
+  Si4432 radio; // radio class
+
   private:
+    bool use_radio = false; // use radio instead of PS2 protocol
+    
+    uint8_t radio_config[43]; // radio config data from EEPROM
+    uint16_t radio_pktid = 0; // radio packet ID
+
     inline void CLK_SET(void);
     inline void CLK_CLR(void);
     inline void CMD_SET(void);
@@ -312,6 +330,8 @@ class PS2X {
     byte controller_type;
     boolean en_Rumble;
     boolean en_Pressures;
+
+    uint32_t radio_timeout = 0;
 };
 
 #endif
