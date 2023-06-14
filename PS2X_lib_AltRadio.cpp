@@ -321,7 +321,7 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
   if(Wire.endTransmission() == 0) {
     /* use radio */
     use_radio = true;
-    radio._csPin = _att_pin; radio._sdnPin = 25; // TODO
+    radio._csPin = _att_pin;
     SPIClass* hspi = new SPIClass(HSPI);
     hspi->begin(_clk_pin, _dat_pin, _cmd_pin, _att_pin);
     Wire.beginTransmission(EEPROM_ADDR);

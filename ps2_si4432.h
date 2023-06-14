@@ -59,7 +59,7 @@ public:
 	void turnOn();
 	void turnOff();
 
-	uint8_t _csPin, _sdnPin, _intPin = 0;
+	uint8_t _csPin, _sdnPin = 0, _intPin = 0;
 
 protected:
 	enum AntennaMode {
