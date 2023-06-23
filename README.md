@@ -5,6 +5,8 @@ Thư viện này giúp các bạn có thể sử dụng tay cầm PS2 cho mạch
 
 Thư viện này là 1 bản sao thư viện tay cầm PS2 của 2 tác giả [madsci1016](https://github.com/madsci1016/Arduino-PS2X) và [MyArduinoLib](https://github.com/MyArduinoLib/Arduino-PS2X-ESP32) được chỉnh sửa lại để sử dụng với mạch VIA Makerbot ESP32
 
+Bản này đã được chỉnh sửa để hỗ trợ sử dụng bộ thu-phát tín hiệu dự phòng của BTC Vietnam Robotics Challenge 2023.
+
 ## Sử dụng thư viện PSX2 với mạch Makerbot BANHMI
 
 
