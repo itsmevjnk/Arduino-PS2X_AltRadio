@@ -359,6 +359,7 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
     }
     address_robot[0] = 'R'; address_trx[0] = 'T';
     if(radio.begin(hspi, _att_pin, _att_pin)) {
+      radio.enableDynamicPayloads();
       radio.setChannel(radio_channel);
       radio.setDataRate((rf24_datarate_e) radio_rate);
       radio.openWritingPipe(address_robot);
