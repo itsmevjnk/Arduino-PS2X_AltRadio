@@ -95,7 +95,7 @@ GNU General Public License for more details.
 #include <stdint.h>
 #include <SPI.h>
 
-#include "ps2_si4432.h"
+#include "RF24/RF24.h"
 #include <Wire.h> // for I2C EEPROM
 
 /* SPI timing configuration */
@@ -215,6 +215,12 @@ typedef uint32_t port_mask_t;
 
 #define RADIO_TIMEOUT     25 // radio packet timeout duration (mS)
 #define RADIO_TIMEOUT_IDLE    150 // timeout duration before setting controller to idle
+
+/* radio settings override */
+// #define RADIO_CHANNEL_OVR 40
+// #define RADIO_RATE_OVR    1
+// #define RADIO_ADDR_OVR    '\0', 'R', 'B', '0', '1'
+
 class PS2X {
   public:
     boolean Button(uint16_t);                //will be TRUE if button is being pressed
@@ -258,12 +264,30 @@ class PS2X {
 	unsigned char PS2data[21];
     volatile unsigned long t_last_att; // time since last ATT inactive
 
-  Si4432 radio; // radio class
+  RF24 radio; // radio class
 
   private:
     bool use_radio = false; // use radio instead of PS2 protocol
-    
-    uint8_t radio_config[43]; // radio config data from EEPROM
+
+#ifdef RADIO_CHANNEL_OVR
+    uint8_t radio_channel = RADIO_CHANNEL_OVR;
+#else
+    uint8_t radio_channel = 0; // radio channel (0-125)
+#endif
+
+#ifdef RADIO_RATE_OVR
+    uint8_t radio_rate = RADIO_RATE_OVR;
+#else
+    uint8_t radio_rate = 0; // data rate (0 = 1Mbps, 1 = 2Mbps, 2 = 250kbps)
+#endif
+
+#ifdef RADIO_ADDR_OVR
+    uint8_t address_robot[5] = {RADIO_ADDR_OVR};
+    uint8_t address_trx[5] = {RADIO_ADDR_OVR};
+#else
+    uint8_t address_robot[5], address_trx[5]; // robot and transceiver addresses
+#endif
+
     uint16_t radio_pktid = 0; // radio packet ID
 
     inline void CLK_SET(void);

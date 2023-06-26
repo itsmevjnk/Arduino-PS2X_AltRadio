@@ -105,24 +105,34 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
     trx_buf[2] = 0x02;
     trx_buf[3] = (motor1) ? 1 : 0;
     trx_buf[4] = motor2;
-    if(radio.sendPacket(5, trx_buf) == true) {
-      radio.startListening();
+    radio.stopListening();
+    bool ret = radio.write(trx_buf, 5);
+    radio.startListening();
+    if(ret == true) {
       uint64_t t_poll = millis();
       while(millis() - t_poll < RADIO_TIMEOUT) {
-        if(radio.isPacketReceived()) {
-          uint8_t len;
-          radio.getPacketReceived(&len, trx_buf);
-          radio.startListening();
+        uint8_t pipe;
+        if(radio.available(&pipe)) {
+          uint8_t len = radio.getPayloadSize();
+          radio.read(trx_buf, len);
+#ifdef PS2X_DEBUG
+          Serial.print("Received payload: ");
+          for(uint8_t i = 0; i < len; i++) Serial.printf(PSTR("%02X "), trx_buf[i]);
+          Serial.println();
+#endif
           uint16_t id = trx_buf[0] | (trx_buf[1] << 8);
           if(!(id & (1 << 15)) && id == radio_pktid) {
             for(uint8_t i = 3; i < 21; i++) PS2data[i] = trx_buf[i]; // update data
             break;
           }
+#ifdef PS2X_DEBUG
+          else Serial.println("Packet ID mismatch");
+#endif
           radio_timeout = 0;
         }
       }
       if(millis() - t_poll >= RADIO_TIMEOUT) {
-#ifdef RADIO_DEBUG
+#ifdef PS2X_DEBUG
         Serial.println("Radio packet timeout");
 #endif
         if(radio_timeout == 0) radio_timeout = millis();
@@ -130,7 +140,12 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
           for(uint8_t i = 0; i < 21; i++) PS2data[i] = packet_idle[i]; // set everything to idle so nothing freaks out
         }
       }
-    } else radio_ret = false;
+    } else {
+#ifdef PS2X_DEBUG
+      Serial.println("Transceiver unreachable");
+#endif
+      radio_ret = false;
+    }
   } else {
 
    double temp = millis() - last_read;
@@ -318,26 +333,36 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
   Wire.begin(); // so we can poll for EEPROM
   
   Wire.beginTransmission(EEPROM_ADDR);
+  Wire.write(0); // read from beginning
   if(Wire.endTransmission() == 0) {
     /* use radio */
     use_radio = true;
-    radio._csPin = _att_pin;
     SPIClass* hspi = new SPIClass(HSPI);
     hspi->begin(_clk_pin, _dat_pin, _cmd_pin, _att_pin);
-    Wire.beginTransmission(EEPROM_ADDR);
-    Wire.write(0); // read from beginning
-    Wire.endTransmission();
-    for(uint8_t i = 0; i < 43; i++) {
-      if(i % 32 == 0) Wire.requestFrom(EEPROM_ADDR, (i == 0) ? 32 : (43 - i), true);
-      radio_config[i] = Wire.read();
-#ifdef EEPROM_DEBUG
-      if(i % 8 == 0) {
-        Serial.printf_P(PSTR("\n%02X: "), i);
-      }
-      Serial.printf_P(PSTR("%02X "), radio_config[i]);
+    Wire.requestFrom(EEPROM_ADDR, 6, true);
+#ifdef RADIO_CHANNEL_OVR
+    Wire.read();
+#else
+    radio_channel = Wire.read();
+#endif
+#ifdef RADIO_RATE_OVR
+    Wire.read();
+#else
+    radio_rate = Wire.read();
+#endif
+    for(uint8_t i = 1; i < 5; i++) {
+      uint8_t t = Wire.read();
+#ifndef RADIO_ADDR_OVR
+      address_robot[i] = t;
+      address_trx[i] = t;
 #endif
     }
-    if(radio.init(hspi, radio_config)) {
+    address_robot[0] = 'R'; address_trx[0] = 'T';
+    if(radio.begin(hspi, _att_pin, _att_pin)) {
+      radio.setChannel(radio_channel);
+      radio.setDataRate((rf24_datarate_e) radio_rate);
+      radio.openWritingPipe(address_robot);
+      radio.openReadingPipe(1, address_trx);
       radio.startListening();
       for(uint8_t i = 0; i < 21; i++) PS2data[i] = packet_idle[i]; // set everything to idle so nothing freaks out
       buttons =  (uint16_t)(PS2data[4] << 8) + PS2data[3];
@@ -417,33 +442,35 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
 
 /****************************************************************************************/
 void PS2X::sendCommandString(byte string[], byte len) {
-#ifdef PS2X_COM_DEBUG
-  byte temp[len];
-  BEGIN_SPI();
+  if(!use_radio) {
+  #ifdef PS2X_COM_DEBUG
+    byte temp[len];
+    BEGIN_SPI();
 
-  for (int y=0; y < len; y++)
-    temp[y] = _gamepad_shiftinout(string[y]);
+    for (int y=0; y < len; y++)
+      temp[y] = _gamepad_shiftinout(string[y]);
 
-  END_SPI();
+    END_SPI();
 
-  delay(read_delay); //wait a few
+    delay(read_delay); //wait a few
 
-  Serial.println("OUT:IN Configure");
-  for(int i=0; i<len; i++) {
-    Serial.print(string[i], HEX);
-    Serial.print(":");
-    Serial.print(temp[i], HEX);
-    Serial.print(" ");
+    Serial.println("OUT:IN Configure");
+    for(int i=0; i<len; i++) {
+      Serial.print(string[i], HEX);
+      Serial.print(":");
+      Serial.print(temp[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.println("");
+  #else
+    BEGIN_SPI();
+    for (int y=0; y < len; y++)
+      _gamepad_shiftinout(string[y]);
+    END_SPI();
+
+    delay(read_delay);                  //wait a few
+  #endif
   }
-  Serial.println("");
-#else
-  BEGIN_SPI();
-  for (int y=0; y < len; y++)
-    _gamepad_shiftinout(string[y]);
-  END_SPI();
-
-  delay(read_delay);                  //wait a few
-#endif
 }
 
 /****************************************************************************************/
