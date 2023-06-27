@@ -327,6 +327,15 @@ byte PS2X::config_gamepad(SPIClass* spi, uint8_t att, bool pressures, bool rumbl
 
 #define EEPROM_DEBUG
 
+void PS2X::radio_post_init() {
+  radio.setPALevel(radio_palvl);
+  radio.setChannel(radio_channel);
+  radio.setDataRate((rf24_datarate_e) radio_rate);
+  radio.openWritingPipe(address_robot);
+  radio.openReadingPipe(1, address_trx);
+  radio.startListening();
+}
+
 byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
   byte temp[sizeof(type_read)];
 
@@ -339,7 +348,7 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
     use_radio = true;
     SPIClass* hspi = new SPIClass(HSPI);
     hspi->begin(_clk_pin, _dat_pin, _cmd_pin, _att_pin);
-    Wire.requestFrom(EEPROM_ADDR, 6, true);
+    Wire.requestFrom(EEPROM_ADDR, 7, true);
 #ifdef RADIO_CHANNEL_OVR
     Wire.read();
 #else
@@ -358,14 +367,14 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
 #endif
     }
     address_robot[0] = 'R'; address_trx[0] = 'T';
+#ifndef RADIO_PALVL_OVR
+    radio_palvl = Wire.read();
+#endif
+
     if(radio.begin(hspi, _att_pin, _att_pin)) {
       //radio.enableDynamicPayloads();
       //radio.setPayloadSize(5); // we have no need to send packets longer than 5 bytes
-      radio.setChannel(radio_channel);
-      radio.setDataRate((rf24_datarate_e) radio_rate);
-      radio.openWritingPipe(address_robot);
-      radio.openReadingPipe(1, address_trx);
-      radio.startListening();
+      radio_post_init();
       for(uint8_t i = 0; i < 21; i++) PS2data[i] = packet_idle[i]; // set everything to idle so nothing freaks out
       buttons =  (uint16_t)(PS2data[4] << 8) + PS2data[3];
       last_buttons = buttons;
