@@ -220,6 +220,7 @@ typedef uint32_t port_mask_t;
 // #define RADIO_CHANNEL_OVR 40
 // #define RADIO_RATE_OVR    1
 // #define RADIO_ADDR_OVR    '\0', 'R', 'B', '0', '1'
+// #define RADIO_PALVL_OVR   RF24_PA_MIN
 
 class PS2X {
   public:
@@ -288,6 +289,12 @@ class PS2X {
     uint8_t address_robot[5], address_trx[5]; // robot and transceiver addresses
 #endif
 
+#ifdef RADIO_PALVL_OVR
+    uint8_t radio_palvl = RADIO_PALVL_OVR;
+#else
+    uint8_t radio_palvl = 0; // PA level (0-3 corresponding to min-max)
+#endif
+
     uint16_t radio_pktid = 0; // radio packet ID
 
     inline void CLK_SET(void);
@@ -305,6 +312,8 @@ class PS2X {
     inline void END_SPI(void);
     
     byte config_gamepad_stub(bool, bool); // common gamepad initialization sequence
+
+    void radio_post_init();
 
     unsigned char _gamepad_shiftinout (char);
     void sendCommandString(byte*, byte);
