@@ -76,6 +76,7 @@ GNU General Public License for more details.
 // to debug ps2 controller, uncomment these two lines to print out debug to uart
 //#define PS2X_DEBUG
 //#define PS2X_COM_DEBUG
+//#define PS2X_DEBUG_PAYLOAD
 
 #ifndef PS2X_lib_h
   #define PS2X_lib_h

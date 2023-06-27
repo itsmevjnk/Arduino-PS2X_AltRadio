@@ -98,6 +98,13 @@ void PS2X::read_gamepad() {
 boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
   bool radio_ret = true; // OK by default
   if(use_radio) {
+    if(radio.getChannel() != radio_channel || radio.getDataRate() != radio_rate) {
+#ifdef PS2X_DEBUG
+        Serial.println("FAIL: Configuration lost");
+#endif
+        radio.begin(_spi);
+        radio_post_init();
+    }
     uint8_t trx_buf[32];
     radio_pktid = (radio_pktid + 1) & 0x7FFF;
     trx_buf[0] = (uint8_t) (radio_pktid & 0xFF);
@@ -113,9 +120,26 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
       while(millis() - t_poll < RADIO_TIMEOUT) {
         uint8_t pipe;
         if(radio.available(&pipe)) {
-          uint8_t len = radio.getPayloadSize();
-          radio.read(trx_buf, len);
+          uint8_t len;
+          uint32_t fail_timer = millis();
+          bool discard = false;
+          while(radio.available()) {
+            if(millis() - fail_timer > 50) {
 #ifdef PS2X_DEBUG
+              Serial.println("FAIL: Data always available for reading");
+#endif
+              radio.begin(_spi);
+              radio_post_init();
+              discard = true;
+            }
+            len = radio.getPayloadSize();
+            radio.read(trx_buf, len);
+          }
+          if(discard) {
+            radio_ret = false;
+            break;
+          }
+#ifdef PS2X_DEBUG_PAYLOAD
           Serial.print("Received payload: ");
           for(uint8_t i = 0; i < len; i++) Serial.printf(PSTR("%02X "), trx_buf[i]);
           Serial.println();
@@ -126,7 +150,7 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
             break;
           }
 #ifdef PS2X_DEBUG
-          else Serial.println("Packet ID mismatch");
+          else Serial.printf(PSTR("Packet ID mismatch (%04X vs %04X)\n"), id, radio_pktid);
 #endif
           radio_timeout = 0;
         }
@@ -328,6 +352,8 @@ byte PS2X::config_gamepad(SPIClass* spi, uint8_t att, bool pressures, bool rumbl
 #define EEPROM_DEBUG
 
 void PS2X::radio_post_init() {
+  radio.disableAckPayload();
+  radio.setAutoAck(false);
   radio.setPALevel(radio_palvl);
   radio.setChannel(radio_channel);
   radio.setDataRate((rf24_datarate_e) radio_rate);
@@ -346,8 +372,8 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
   if(Wire.endTransmission() == 0) {
     /* use radio */
     use_radio = true;
-    SPIClass* hspi = new SPIClass(HSPI);
-    hspi->begin(_clk_pin, _dat_pin, _cmd_pin, _att_pin);
+    _spi = new SPIClass(HSPI);
+    _spi->begin(_clk_pin, _dat_pin, _cmd_pin, _att_pin);
     Wire.requestFrom(EEPROM_ADDR, 7, true);
 #ifdef RADIO_CHANNEL_OVR
     Wire.read();
@@ -371,7 +397,7 @@ byte PS2X::config_gamepad_stub(bool pressures, bool rumble) {
     radio_palvl = Wire.read();
 #endif
 
-    if(radio.begin(hspi, _att_pin, _att_pin)) {
+    if(radio.begin(_spi, _att_pin, _att_pin)) {
       //radio.enableDynamicPayloads();
       //radio.setPayloadSize(5); // we have no need to send packets longer than 5 bytes
       radio_post_init();
