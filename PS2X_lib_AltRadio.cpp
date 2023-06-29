@@ -98,6 +98,7 @@ void PS2X::read_gamepad() {
 boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
   bool radio_ret = true; // OK by default
   if(use_radio) {
+    while(millis() - t_last_att < CTRL_PACKET_DELAY); // space out polls to prevent flooding the transceiver
     if(radio.getChannel() != radio_channel || radio.getDataRate() != radio_rate) {
 #ifdef PS2X_DEBUG
         Serial.println("FAIL: Configuration lost");
@@ -147,20 +148,27 @@ boolean PS2X::read_gamepad(boolean motor1, byte motor2) {
           uint16_t id = trx_buf[0] | (trx_buf[1] << 8);
           if(!(id & (1 << 15)) && id == radio_pktid) {
             for(uint8_t i = 3; i < 21; i++) PS2data[i] = trx_buf[i]; // update data
+            t_last_att = millis();
+            radio_timeout = 0;
             break;
           }
 #ifdef PS2X_DEBUG
           else Serial.printf(PSTR("Packet ID mismatch (%04X vs %04X)\n"), id, radio_pktid);
 #endif
-          radio_timeout = 0;
         }
       }
+      // Serial.print("TIME:");
+      // Serial.println(millis() - t_poll, DEC);
       if(millis() - t_poll >= RADIO_TIMEOUT) {
 #ifdef PS2X_DEBUG
         Serial.println("Radio packet timeout");
 #endif
         if(radio_timeout == 0) radio_timeout = millis();
         else if(millis() - radio_timeout >= RADIO_TIMEOUT_IDLE) {
+          Serial.print("IDLE:");
+          Serial.print(millis() - radio_timeout, DEC);
+          Serial.print(' ');
+          Serial.println(radio_timeout, DEC);
           for(uint8_t i = 0; i < 21; i++) PS2data[i] = packet_idle[i]; // set everything to idle so nothing freaks out
         }
       }

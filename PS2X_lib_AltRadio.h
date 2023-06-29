@@ -215,7 +215,7 @@ typedef uint32_t port_mask_t;
 #define EEPROM_ADDR       0x50 // address of radio configuration EEPROM
 
 #define RADIO_TIMEOUT     25 // radio packet timeout duration (mS)
-#define RADIO_TIMEOUT_IDLE    150 // timeout duration before setting controller to idle
+#define RADIO_TIMEOUT_IDLE    250 // timeout duration before setting controller to idle
 
 /* radio settings override */
 // #define RADIO_CHANNEL_OVR 40
